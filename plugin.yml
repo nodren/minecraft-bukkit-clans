@@ -1,0 +1,18 @@
+name: Clans
+main: com.echo28.bukkit.clans.Clans
+version: 1.0
+commands:
+  clan:
+    description: Work with clans
+    usage: Invalid usage, type /clan help for help
+           /<command> set chat - Toggle clan chat
+           /<command> set tag <tag> - Set your clan's tag
+           /<command> set hall - Set your clan hall to your location
+           /<command> admin <clan> - All future clan commands reference clan you specify
+           /<command> reset - used in conjunction with /<command> admin, resets to your clan 
+  cc:
+    description: Clan chat
+    usage: /<command> <message> - Talk to your clan members
+  ch:
+    description: Clan hall
+    usage: /<command> - Warp to your clan hall
