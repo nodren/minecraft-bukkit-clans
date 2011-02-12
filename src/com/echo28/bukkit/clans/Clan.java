@@ -23,13 +23,19 @@ public class Clan
 	private List<String> members = new ArrayList<String>();
 	private List<String> council = new ArrayList<String>();
 	private List<String> wars = new ArrayList<String>();
+	private List<String> applied = new ArrayList<String>();
 	private String leader = null;
 	private Location location = null;
 
+	private boolean openApps = false;
+	private boolean openJoin = false;
 	private boolean chat = false;
 	private String tag;
 
+	private final Object save = new Object();
+
 	private final Logger log = Logger.getLogger("Minecraft");
+	private final Logger clanLog = Logger.getLogger("Clans");
 
 	public Clan(Clans plugin, String name)
 	{
@@ -59,8 +65,8 @@ public class Clan
 			double db = 0;
 			if (config.getDouble("settings.location.x", db) != 0)
 			{
-				location = new Location(getWorld(config.getInt("settings.location.world", 0)), config.getDouble("settings.location.x", db), config.getDouble("settings.location.y",
-						db), config.getDouble("settings.location.z", db), (float) config.getDouble("settings.location.yaw", db), (float) config.getDouble(
+				location = new Location(getWorld(config.getString("settings.location.world", "world")), config.getDouble("settings.location.x", db), config.getDouble(
+						"settings.location.y", db), config.getDouble("settings.location.z", db), (float) config.getDouble("settings.location.yaw", db), (float) config.getDouble(
 						"settings.location.pitch", db));
 			}
 		}
@@ -90,52 +96,59 @@ public class Clan
 		}
 	}
 
-	private World getWorld(long id)
+	private World getWorld(String name)
 	{
 		List<World> worlds = plugin.getServer().getWorlds();
 		for (World world : worlds)
 		{
-			if (world.getId() == id) { return world; }
+			if (world.getName().equalsIgnoreCase(name)) { return world; }
 		}
 		return null;
 	}
 
 	private void save()
 	{
-		File yml = new File(plugin.getDataFolder(), name + ".yml");
-		if (!yml.exists())
+		synchronized (save)
 		{
-			try
+			File yml = new File(plugin.getDataFolder(), name + ".yml");
+			if (!yml.exists())
 			{
-				yml.createNewFile();
+				try
+				{
+					yml.createNewFile();
+				}
+				catch (IOException ex)
+				{
+				}
 			}
-			catch (IOException ex)
+			Configuration config = new Configuration(yml);
+			config.setProperty("members", members);
+			config.setProperty("council", council);
+			config.setProperty("settings.leader", leader);
+			config.setProperty("settings.tag", tag);
+			config.setProperty("settings.chat", chat);
+			config.setProperty("settings.open-apps", openApps);
+			config.setProperty("settings.open-join", openJoin);
+			config.setProperty("applied", applied);
+			if (location != null)
 			{
-			}
-		}
-		Configuration config = new Configuration(yml);
-		config.setProperty("members", members);
-		config.setProperty("council", council);
-		config.setProperty("settings.leader", leader);
-		config.setProperty("settings.tag", tag);
-		config.setProperty("settings.chat", chat);
-		if (location != null)
-		{
-			config.setProperty("settings.location.x", location.getX());
-			config.setProperty("settings.location.y", location.getY());
-			config.setProperty("settings.location.z", location.getZ());
-			config.setProperty("settings.location.yaw", location.getYaw());
-			config.setProperty("settings.location.pitch", location.getPitch());
-			log.info("world:" + location.getWorld());
-			log.info("world id:" + location.getWorld().getId());
-			config.setProperty("settings.location.world", location.getWorld().getId());
+				config.setProperty("settings.location.x", location.getX());
+				config.setProperty("settings.location.y", location.getY());
+				config.setProperty("settings.location.z", location.getZ());
+				config.setProperty("settings.location.yaw", location.getYaw());
+				config.setProperty("settings.location.pitch", location.getPitch());
+				log.info("world:" + location.getWorld());
+				log.info("world id:" + location.getWorld().getId());
+				config.setProperty("settings.location.world", location.getWorld().getName());
 
+			}
+			config.save();
 		}
-		config.save();
 	}
 
 	public void disband()
 	{
+		clanLog.info("{event:'clan-disbanded',clan:'" + getName() + "'}");
 		File yml = new File(plugin.getDataFolder(), name + ".yml");
 		yml.delete();
 	}
@@ -186,20 +199,73 @@ public class Clan
 		return false;
 	}
 
+	public void applications(CommandSender sender)
+	{
+		String message = "List of applications: ";
+		List<String> members = applied;
+		int i = 0;
+		for (String member : members)
+		{
+			message += member + " ";
+			i++;
+		}
+		sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + message);
+	}
+
+	public void accept(CommandSender sender, Player player)
+	{
+		if (!applied.contains(player.getName()))
+		{
+			sender.sendMessage(ChatColor.RED + getName() + ": " + player.getDisplayName() + ChatColor.YELLOW + " didn't submit an application.");
+			return;
+		}
+		applied.remove(player.getName());
+		addMember(player);
+	}
+
+	public void deny(CommandSender sender, String playerName)
+	{
+		if (!applied.contains(playerName))
+		{
+			sender.sendMessage(ChatColor.RED + getName() + ": " + playerName + ChatColor.YELLOW + " didn't submit an application.");
+			return;
+		}
+		applied.remove(playerName);
+	}
+
+	public void apply(Player player)
+	{
+		applied.add(player.getName());
+		save();
+		player.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + " Someone will get back to you shortly.");
+		clanLog.info("{event:'player-applied',player:'" + player.getName() + "',clan:'" + getName() + "'}");
+	}
+
+	public void join(Player player)
+	{
+		if (openJoin)
+		{
+			addMember(player);
+		}
+	}
+
 	public void addMember(Player player)
 	{
 		if (isMember(player)) { return; }
 		if (members.size() == 0)
 		{
 			leader = player.getName();
+			clanLog.info("{event:'leader-set',player:'" + player.getName() + "',clan:'" + getName() + "'}");
 		}
 		members.add(player.getName());
 		joined(player);
 		if (council.size() == 0)
 		{
-			council.add(player.getName());
+			addCouncil(player);
 		}
 		save();
+		sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + player.getDisplayName() + ChatColor.YELLOW + " has joined the clan.");
+		clanLog.info("{event:'member-added',player:'" + player.getName() + "',clan:'" + getName() + "'}");
 	}
 
 	public void addCouncil(Player player)
@@ -207,16 +273,24 @@ public class Clan
 		if (isCouncil(player)) { return; }
 		council.add(player.getName());
 		save();
+		clanLog.info("{event:'council-added',player:'" + player.getName() + "',clan:'" + getName() + "'}");
+		sendMessage(player.getDisplayName() + ChatColor.RED + " joined the council");
 	}
 
 	public void removeMember(Player player)
 	{
 		if (!isMember(player)) { return; }
+		if (isLeader(player)) { return; }
+		if (isCouncil(player))
+		{
+			removeCouncil(player);
+		}
 		members.remove(player.getName());
 		quit(player);
 		save();
 		player.sendMessage(ChatColor.RED + "You were removed from your clan.");
-		sendMessage(player.getDisplayName() + ChatColor.RED + " was removed from the clan");
+		sendMessage(player.getDisplayName() + ChatColor.RED + " has left the clan");
+		clanLog.info("{event:'member-removed',player:'" + player.getName() + "',clan:'" + getName() + "'}");
 	}
 
 	public void removeCouncil(Player player)
@@ -224,8 +298,8 @@ public class Clan
 		if (!isCouncil(player)) { return; }
 		council.remove(player.getName());
 		save();
-		player.sendMessage(ChatColor.RED + "You were removed from the council.");
-		sendMessage(player.getDisplayName() + ChatColor.RED + " was removed from the council");
+		sendMessage(player.getDisplayName() + ChatColor.RED + " left the council");
+		clanLog.info("{event:'council-removed',player:'" + player.getName() + "',clan:'" + getName() + "'}");
 	}
 
 	public void setLeader(Player player)
@@ -234,11 +308,51 @@ public class Clan
 		leader = player.getName();
 		save();
 		sendMessage(player.getDisplayName() + ChatColor.RED + " is now the clan leader");
+		clanLog.info("{event:'leader-set',player:'" + player.getName() + "',clan:'" + getName() + "'}");
 	}
 
 	public void setTag(String tag)
 	{
 		this.tag = tag;
+		save();
+		clanLog.info("{event:'tag-set',tag:'" + tag + "',clan:'" + getName() + "'}");
+		if (plugin.appendTag)
+		{
+			for (Player player : online)
+			{
+				quit(player);
+				joined(player);
+			}
+		}
+	}
+
+	public void setOpenApps(CommandSender sender)
+	{
+		if (openApps)
+		{
+			openApps = false;
+			sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "applications are now disabled.");
+		}
+		else
+		{
+			openApps = true;
+			sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "applications are now enabled.");
+		}
+		save();
+	}
+
+	public void setOpenJoin(CommandSender sender)
+	{
+		if (openJoin)
+		{
+			openJoin = false;
+			sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "open joining is now disabled.");
+		}
+		else
+		{
+			openJoin = true;
+			sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "open joining is now enabled.");
+		}
 		save();
 	}
 
@@ -266,7 +380,8 @@ public class Clan
 		if (!chat) { return; }
 		for (Player p : online)
 		{
-			p.sendMessage(ChatColor.YELLOW + "[CLAN-MSG]" + ChatColor.WHITE + "<" + player.getDisplayName() + ChatColor.WHITE + "> " + message);
+			p.sendMessage(ChatColor.RED + "[CLAN-MSG]" + ChatColor.WHITE + "<" + player.getDisplayName() + ChatColor.WHITE + "> " + message);
+			clanLog.info("{event:'clan-msg',msg:'" + message + "',clan:'" + getName() + "'}");
 		}
 	}
 
@@ -277,7 +392,8 @@ public class Clan
 		{
 			if (isCouncil(p))
 			{
-				p.sendMessage(ChatColor.YELLOW + "[CLAN-COUNCIL-MSG]" + ChatColor.WHITE + "<" + player.getDisplayName() + ChatColor.WHITE + "> " + message);
+				p.sendMessage(ChatColor.RED + "[CLAN-COUNCIL-MSG]" + ChatColor.WHITE + "<" + player.getDisplayName() + ChatColor.WHITE + "> " + message);
+				clanLog.info("{event:'clan-council-msg',msg:'" + message + "',clan:'" + getName() + "'}");
 			}
 		}
 	}
@@ -325,11 +441,11 @@ public class Clan
 		{
 			if (plugin.appendTagTo.equalsIgnoreCase("name"))
 			{
-				player.setDisplayName(ChatColor.WHITE + "[" + ChatColor.YELLOW + getName() + ChatColor.WHITE + "]" + player.getName());
+				player.setDisplayName(ChatColor.WHITE + "[" + ChatColor.YELLOW + tag + ChatColor.WHITE + "]" + player.getName());
 			}
 			else if (plugin.appendTagTo.equalsIgnoreCase("display-name"))
 			{
-				player.setDisplayName(ChatColor.WHITE + "[" + ChatColor.YELLOW + getName() + ChatColor.WHITE + "]" + player.getDisplayName());
+				player.setDisplayName(ChatColor.WHITE + "[" + ChatColor.YELLOW + tag + ChatColor.WHITE + "]" + player.getDisplayName());
 			}
 		}
 		online.add(player);
@@ -375,7 +491,7 @@ public class Clan
 	// winner(this clan) killed loser(loserClan)
 	public void deathClanWinner(Player winner, Player loser, String cause, Clan loserClan)
 	{
-		if (wars.contains(loserClan))
+		if (wars.contains(loserClan.getName()))
 		{
 			int id = plugin.model.getActiveWar(getName(), loserClan.getName());
 			if (id != 0)
@@ -460,7 +576,14 @@ public class Clan
 		}
 		plugin.model.startWar(getName(), clan.getName());
 		wars.add(clan.getName());
+		clan.addWar(this);
 		sendMessage(ChatColor.RED + "You are now at war with " + ChatColor.YELLOW + clan.getName());
+	}
+
+	public void addWar(Clan clan)
+	{
+		wars.add(clan.getName());
+		sendMessage(ChatColor.YELLOW + clan.getName() + ChatColor.RED + " has declared war on you!");
 	}
 
 	public void warEnd(Player player, Clan clan)
@@ -488,16 +611,30 @@ public class Clan
 		}
 		else if (warWins > warLosses)
 		{
-			sendMessage(ChatColor.RED + "Your war with " + ChatColor.YELLOW + clan.getName() + ChatColor.RED + "is over, you won!");
+			sendMessage(ChatColor.RED + "Your war with " + ChatColor.YELLOW + clan.getName() + ChatColor.RED + " is over, you won!");
 			victor = getName();
 		}
 		else
 		{
-			sendMessage(ChatColor.RED + "Your war with " + ChatColor.YELLOW + clan.getName() + ChatColor.RED + "is over, you lost!");
+			sendMessage(ChatColor.RED + "Your war with " + ChatColor.YELLOW + clan.getName() + ChatColor.RED + " is over, you lost!");
 			victor = clan.getName();
 		}
 		plugin.model.endWar(id, getName(), victor);
-		wars.remove(clan);
+		wars.remove(clan.getName());
+		clan.removeWar(this, warLosses, warWins);
+	}
+
+	public void removeWar(Clan clan, int warWins, int warLosses)
+	{
+		wars.remove(clan.getName());
+		if (warWins > warLosses)
+		{
+			sendMessage(ChatColor.RED + "Your war with " + ChatColor.YELLOW + clan.getName() + ChatColor.RED + " is over, you won!");
+		}
+		else
+		{
+			sendMessage(ChatColor.RED + "Your war with " + ChatColor.YELLOW + clan.getName() + ChatColor.RED + " is over, you lost!");
+		}
 	}
 
 	public void sendMessage(String message)
