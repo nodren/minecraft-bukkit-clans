@@ -349,8 +349,11 @@ public class ClanModel
 			PreparedStatement prep = conn().prepareStatement(sql);
 			prep.setString(1, param);
 			ResultSet rs = prep.executeQuery();
-			rs.next();
-			int ret = rs.getInt("count");
+			int ret = 0;
+			if (rs.next())
+			{
+				ret = rs.getInt("count");
+			}
 			rs.close();
 			closeConn();
 			return ret;
@@ -371,8 +374,11 @@ public class ClanModel
 			prep.setInt(1, param1);
 			prep.setString(2, param2);
 			ResultSet rs = prep.executeQuery();
-			rs.next();
-			int ret = rs.getInt("count");
+			int ret = 0;
+			if (rs.next())
+			{
+				ret = rs.getInt("count");
+			}
 			rs.close();
 			closeConn();
 			return ret;
@@ -393,8 +399,11 @@ public class ClanModel
 			prep.setString(1, param1);
 			prep.setString(2, param2);
 			ResultSet rs = prep.executeQuery();
-			rs.next();
-			int ret = rs.getInt("count");
+			int ret = 0;
+			if (rs.next())
+			{
+				ret = rs.getInt("count");
+			}
 			rs.close();
 			closeConn();
 			return ret;
@@ -416,8 +425,11 @@ public class ClanModel
 			prep.setString(2, param2);
 			prep.setString(3, param3);
 			ResultSet rs = prep.executeQuery();
-			rs.next();
-			int ret = rs.getInt("count");
+			int ret = 0;
+			if (rs.next())
+			{
+				ret = rs.getInt("count");
+			}
 			rs.close();
 			closeConn();
 			return ret;

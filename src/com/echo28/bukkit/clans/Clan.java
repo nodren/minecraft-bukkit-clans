@@ -59,6 +59,7 @@ public class Clan
 			config.load();
 			members = config.getStringList("members", null);
 			council = config.getStringList("council", null);
+			applied = config.getStringList("applied", null);
 			leader = config.getString("settings.leader", "");
 			tag = config.getString("settings.tag", "");
 			chat = config.getBoolean("settings.chat", false);
@@ -148,6 +149,7 @@ public class Clan
 
 	public void disband()
 	{
+		removeTags();
 		clanLog.info("{event:'clan-disbanded',clan:'" + getName() + "'}");
 		File yml = new File(plugin.getDataFolder(), name + ".yml");
 		yml.delete();
@@ -235,10 +237,17 @@ public class Clan
 
 	public void apply(Player player)
 	{
-		applied.add(player.getName());
-		save();
-		player.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + " Someone will get back to you shortly.");
-		clanLog.info("{event:'player-applied',player:'" + player.getName() + "',clan:'" + getName() + "'}");
+		if (openApps)
+		{
+			applied.add(player.getName());
+			save();
+			player.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + " Someone will get back to you shortly.");
+			clanLog.info("{event:'player-applied',player:'" + player.getName() + "',clan:'" + getName() + "'}");
+		}
+		else
+		{
+			player.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + " Applications are closed, try again later.");
+		}
 	}
 
 	public void join(Player player)
@@ -381,8 +390,8 @@ public class Clan
 		for (Player p : online)
 		{
 			p.sendMessage(ChatColor.RED + "[CLAN-MSG]" + ChatColor.WHITE + "<" + player.getDisplayName() + ChatColor.WHITE + "> " + message);
-			clanLog.info("{event:'clan-msg',msg:'" + message + "',clan:'" + getName() + "'}");
 		}
+		clanLog.info("{event:'clan-msg',msg:'" + message + "',clan:'" + getName() + "'}");
 	}
 
 	public void councilChat(Player player, String message)
@@ -393,9 +402,9 @@ public class Clan
 			if (isCouncil(p))
 			{
 				p.sendMessage(ChatColor.RED + "[CLAN-COUNCIL-MSG]" + ChatColor.WHITE + "<" + player.getDisplayName() + ChatColor.WHITE + "> " + message);
-				clanLog.info("{event:'clan-council-msg',msg:'" + message + "',clan:'" + getName() + "'}");
 			}
 		}
+		clanLog.info("{event:'clan-council-msg',msg:'" + message + "',clan:'" + getName() + "'}");
 	}
 
 	public void setHallLocation(Location location)
@@ -406,7 +415,7 @@ public class Clan
 
 	public boolean canModify(CommandSender sender)
 	{
-		if (sender.isOp()) { return true; }
+		if (plugin.check(sender, "clans.admin.council")) { return true; }
 		if (sender instanceof Player)
 		{
 			Player player = (Player) sender;
@@ -418,7 +427,7 @@ public class Clan
 
 	public boolean canLeaderModify(CommandSender sender)
 	{
-		if (sender.isOp()) { return true; }
+		if (plugin.check(sender, "clans.admin.leader")) { return true; }
 		if (sender instanceof Player)
 		{
 			Player player = (Player) sender;
@@ -456,6 +465,17 @@ public class Clan
 		if (online.contains(player))
 		{
 			online.remove(player);
+			if (plugin.appendTag)
+			{
+				player.setDisplayName(player.getName());
+			}
+		}
+	}
+
+	public void removeTags()
+	{
+		for (Player player : online)
+		{
 			if (plugin.appendTag)
 			{
 				player.setDisplayName(player.getName());
@@ -546,6 +566,11 @@ public class Clan
 	// stats about this clan's wars
 	public void sendWarStats(CommandSender sender, Clan opposingClan)
 	{
+		if (this.equals(opposingClan))
+		{
+			sender.sendMessage(ChatColor.RED + "You cannot get stats against yourself.");
+			return;
+		}
 		sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "War stats against " + ChatColor.GRAY + opposingClan.getName());
 		int warsFought = plugin.model.warsCount(getName(), opposingClan.getName());
 		int warsEndedByUs = plugin.model.warsEnded(getName(), opposingClan.getName(), getName());
@@ -567,11 +592,11 @@ public class Clan
 		}
 	}
 
-	public void warDeclare(Player player, Clan clan)
+	public void warDeclare(CommandSender sender, Clan clan)
 	{
 		if (wars.contains(clan.getName()))
 		{
-			player.sendMessage(ChatColor.RED + "You are already at war with " + clan.getName());
+			sender.sendMessage(ChatColor.RED + "You are already at war with " + clan.getName());
 			return;
 		}
 		plugin.model.startWar(getName(), clan.getName());
@@ -586,17 +611,17 @@ public class Clan
 		sendMessage(ChatColor.YELLOW + clan.getName() + ChatColor.RED + " has declared war on you!");
 	}
 
-	public void warEnd(Player player, Clan clan)
+	public void warEnd(CommandSender sender, Clan clan)
 	{
 		if (!wars.contains(clan.getName()))
 		{
-			player.sendMessage(ChatColor.RED + "You are not at war with " + clan.getName());
+			sender.sendMessage(ChatColor.RED + "You are not at war with " + clan.getName());
 			return;
 		}
 		int id = plugin.model.getActiveWar(getName(), clan.getName());
 		if (id == 0)
 		{
-			player.sendMessage(ChatColor.RED + "You are not at war with " + clan.getName());
+			sender.sendMessage(ChatColor.RED + "You are not at war with " + clan.getName());
 			log.info("SQLite record not found, couldn't remove clan");
 			wars.remove(clan);
 			return;
@@ -606,7 +631,7 @@ public class Clan
 		String victor = "";
 		if (warWins == warLosses)
 		{
-			player.sendMessage(ChatColor.RED + "You cannot end this war in a tie.");
+			sender.sendMessage(ChatColor.RED + "You cannot end this war in a tie.");
 			return;
 		}
 		else if (warWins > warLosses)
