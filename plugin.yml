@@ -1,16 +1,16 @@
 name: Clans
 main: com.echo28.bukkit.clans.Clans
-version: 1.2
+version: 1.2.1
 commands:
   clan:
     description: Work with clans
     usage: Invalid usage, type /<command> help for help
   cc:
     description: Clan chat
-    usage: /<command> <message> - Talk to your clan members
+    usage: Invalid usage, type /<command> <message> - Talk to your clan members
   ccc:
     description: Clan Council chat
-    usage: /<command> <message> - Talk to your clan council
+    usage: Invalid usage, type /<command> <message> - Talk to your clan council
   ch:
     description: Clan hall
-    usage: /<command> - Warp to your clan hall
+    usage: Invalid usage, type /<command> - Warp to your clan hall

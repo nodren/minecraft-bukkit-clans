@@ -1,4 +1,4 @@
-package com.echo28.bukkit.clans;
+package com.echo28.bukkit.clans.clan;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,6 +12,8 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.util.config.Configuration;
+
+import com.echo28.bukkit.clans.Clans;
 
 
 public class Clan
@@ -201,6 +203,50 @@ public class Clan
 		return false;
 	}
 
+	public void listen(Player player)
+	{
+		if (isOnline(player))
+		{
+			quit(player);
+			player.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "ignoring clan chat");
+		}
+		else
+		{
+			joined(player);
+			player.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "listening to clan chat");
+		}
+	}
+
+	public void sendMembers(CommandSender sender)
+	{
+		List<String> members = getMembers();
+		String message = "List of members(" + members.size() + " total): ";
+		int i = 0;
+		for (String member : members)
+		{
+			message += member + " ";
+			i++;
+		}
+		sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + message);
+	}
+
+	public void sendCouncil(CommandSender sender)
+	{
+		List<String> council = getCouncil();
+		String message = "List of clan council(" + council.size() + " total): ";
+		for (String member : council)
+		{
+			message += member + " ";
+		}
+		sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + message);
+	}
+
+	public void sendLeader(CommandSender sender)
+	{
+
+		sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "Clan leader is " + getLeaderPlayer());
+	}
+
 	public void applications(CommandSender sender)
 	{
 		String message = "List of applications: ";
@@ -311,19 +357,21 @@ public class Clan
 		clanLog.info("{event:'council-removed',player:'" + player.getName() + "',clan:'" + getName() + "'}");
 	}
 
-	public void setLeader(Player player)
+	public void setLeader(CommandSender sender, Player player)
 	{
 		if (!isCouncil(player)) { return; }
 		leader = player.getName();
 		save();
+		sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "Leader set to " + player.getDisplayName() + ".");
 		sendMessage(player.getDisplayName() + ChatColor.RED + " is now the clan leader");
 		clanLog.info("{event:'leader-set',player:'" + player.getName() + "',clan:'" + getName() + "'}");
 	}
 
-	public void setTag(String tag)
+	public void setTag(CommandSender sender, String tag)
 	{
 		this.tag = tag;
 		save();
+		sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "Tag set to " + tag + ".");
 		clanLog.info("{event:'tag-set',tag:'" + tag + "',clan:'" + getName() + "'}");
 		if (plugin.appendTag)
 		{
@@ -365,18 +413,19 @@ public class Clan
 		save();
 	}
 
-	public boolean toggleChat()
+	public void toggleChat(CommandSender sender)
 	{
 		if (chat)
 		{
 			chat = false;
+			sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "Chat is now disabled.");
 		}
 		else
 		{
 			chat = true;
+			sender.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "Chat is now enabled.");
 		}
 		save();
-		return chat;
 	}
 
 	public boolean canChat()
@@ -407,9 +456,10 @@ public class Clan
 		clanLog.info("{event:'clan-council-msg',msg:'" + message + "',clan:'" + getName() + "'}");
 	}
 
-	public void setHallLocation(Location location)
+	public void setHallLocation(Player player)
 	{
-		this.location = location;
+		this.location = player.getLocation();
+		player.sendMessage(ChatColor.RED + getName() + ": " + ChatColor.YELLOW + "Clan hall is now set to your current location.");
 		save();
 	}
 

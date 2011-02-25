@@ -14,20 +14,18 @@ import java.util.logging.SimpleFormatter;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.Server;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.Event.Priority;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.PluginDescriptionFile;
-import org.bukkit.plugin.PluginLoader;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import com.nijikokun.bukkit.Permissions.Permissions;
+import com.echo28.bukkit.clans.clan.Clan;
+import com.echo28.bukkit.clans.clan.ClanModel;
+import com.nijiko.permissions.PermissionHandler;
 
 
 /**
@@ -38,13 +36,14 @@ import com.nijikokun.bukkit.Permissions.Permissions;
 public class Clans extends JavaPlugin
 {
 	private List<Clan> clans = new ArrayList<Clan>();
-	public static Permissions perm = null;
+	public PermissionHandler perm = null;
 
 	public boolean appendTag = false;
 	public String appendTagTo = "name";
 
 	private final ClanPlayerListener playerListener = new ClanPlayerListener(this);
 	private final ClanEntityListener entityListener = new ClanEntityListener(this);
+	private final ClanServerListener serverListener = new ClanServerListener(this);
 	public final ClanModel model = new ClanModel(this);
 	private final Logger log = Logger.getLogger("Minecraft");
 	private Logger clanLog = Logger.getLogger("Clans");
@@ -102,11 +101,20 @@ public class Clans extends JavaPlugin
 			"/clan admin <clan> -" + ChatColor.GRAY + " Administer clan you specify",
 			"/clan reset -" + ChatColor.GRAY + " undoes /clan admin, resets you to your own clan." };
 
-	public Clans(PluginLoader pluginLoader, Server instance, PluginDescriptionFile desc, File folder, File plugin, ClassLoader cLoader)
+	public void onDisable()
 	{
-		super(pluginLoader, instance, desc, folder, plugin, cLoader);
+		unLoadClans();
 
-		folder.mkdirs();
+		clanLog.removeHandler(fh);
+		fh.close();
+		fh = null;
+
+		log.info(getDescription().getName() + " " + getDescription().getVersion() + " unloaded.");
+	}
+
+	public void onEnable()
+	{
+		getDataFolder().mkdirs();
 
 		File yml = new File(getDataFolder(), "config.yml");
 		if (!yml.exists())
@@ -122,24 +130,9 @@ public class Clans extends JavaPlugin
 		}
 		appendTag = getConfiguration().getBoolean("append-clan-tag", false);
 		appendTagTo = getConfiguration().getString("append-clan-tag-to", "name");
-	}
 
-	public void onDisable()
-	{
-		unLoadClans();
-
-		clanLog.removeHandler(fh);
-		fh.close();
-		fh = null;
-
-		log.info(getDescription().getName() + " " + getDescription().getVersion() + " unloaded.");
-	}
-
-	public void onEnable()
-	{
 		model.load();
 		loadClans();
-		setupPermissions();
 
 		try
 		{
@@ -162,26 +155,13 @@ public class Clans extends JavaPlugin
 		PluginManager pm = getServer().getPluginManager();
 		pm.registerEvent(Event.Type.PLAYER_JOIN, playerListener, Priority.Monitor, this);
 		pm.registerEvent(Event.Type.PLAYER_QUIT, playerListener, Priority.Monitor, this);
-		pm.registerEvent(Event.Type.ENTITY_DAMAGEDBY_ENTITY, entityListener, Priority.Monitor, this);
+		pm.registerEvent(Event.Type.ENTITY_DAMAGED, entityListener, Priority.Monitor, this);
 		pm.registerEvent(Event.Type.ENTITY_DEATH, entityListener, Priority.Monitor, this);
+		pm.registerEvent(Event.Type.PLUGIN_ENABLE, serverListener, Priority.Monitor, this);
 
 		log.info(getDescription().getName() + " " + getDescription().getVersion() + " loaded.");
 	}
 
-	public void setupPermissions()
-	{
-		Plugin plugin = this.getServer().getPluginManager().getPlugin("Permissions");
-
-		if (perm == null)
-		{
-			if (plugin != null)
-			{
-				perm = (Permissions) plugin;
-			}
-		}
-	}
-
-	@SuppressWarnings("static-access")
 	public boolean check(CommandSender sender, String permNode)
 	{
 		if (sender instanceof Player)
@@ -194,7 +174,7 @@ public class Clans extends JavaPlugin
 			else
 			{
 				Player player = (Player) sender;
-				return perm.Security.permission(player, permNode);
+				return perm.permission(player, permNode);
 			}
 		}
 		else if (sender instanceof ConsoleCommandSender)
@@ -249,14 +229,12 @@ public class Clans extends JavaPlugin
 		if (command.getName().equalsIgnoreCase("cc"))
 		{
 			if (args.length > 0) { return chat(sender, args); }
-			showChatHelp(sender);
-			return true;
+			return false;
 		}
 		if (command.getName().equalsIgnoreCase("ccc"))
 		{
 			if (args.length > 0) { return councilChat(sender, args); }
-			showCouncilChatHelp(sender);
-			return true;
+			return false;
 		}
 		if (command.getName().equalsIgnoreCase("ch"))
 		{
@@ -304,18 +282,8 @@ public class Clans extends JavaPlugin
 					return councilChat(sender, newArgs);
 				}
 			}
-			if (args.length == 0)
-			{
-				showHelp(sender);
-				return true;
-			}
 			if (args.length == 1)
 			{
-				if (args[0].equalsIgnoreCase("chat"))
-				{
-					showChatHelp(sender);
-					return true;
-				}
 				if (args[0].equalsIgnoreCase("help"))
 				{
 					showHelp(sender);
@@ -384,11 +352,6 @@ public class Clans extends JavaPlugin
 			}
 			if (args.length == 2)
 			{
-				if ((args[0].equalsIgnoreCase("council")) && (args[0].equalsIgnoreCase("chat")))
-				{
-					showCouncilChatHelp(sender);
-					return true;
-				}
 				if (args[0].equalsIgnoreCase("help"))
 				{
 					showHelp(sender, Integer.parseInt(args[1]));
@@ -540,8 +503,7 @@ public class Clans extends JavaPlugin
 				}
 			}
 		}
-		showHelp(sender);
-		return true;
+		return false;
 	}
 
 	private void showHelp(CommandSender sender)
@@ -629,16 +591,6 @@ public class Clans extends JavaPlugin
 		return C;
 	}
 
-	private void showChatHelp(CommandSender sender)
-	{
-		sender.sendMessage(ChatColor.RED + "Invalid syntax: use /cc <msg> or /clan chat <msg>");
-	}
-
-	private void showCouncilChatHelp(CommandSender sender)
-	{
-		sender.sendMessage(ChatColor.RED + "Invalid syntax: use /ccc <msg> or /clan council chat <msg>");
-	}
-
 	private void listen(CommandSender sender)
 	{
 		if (sender instanceof Player)
@@ -661,16 +613,7 @@ public class Clans extends JavaPlugin
 	private void listen(CommandSender sender, Clan clan)
 	{
 		Player player = (Player) sender;
-		if (clan.isOnline(player))
-		{
-			clan.quit(player);
-			player.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "ignoring clan chat");
-		}
-		else
-		{
-			clan.joined(player);
-			player.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "listening to clan chat");
-		}
+		clan.listen(player);
 	}
 
 	private void clanList(CommandSender sender)
@@ -714,29 +657,24 @@ public class Clans extends JavaPlugin
 
 	private void create(CommandSender sender, String name)
 	{
-		if (!(sender instanceof Player))
-		{
-			sender.sendMessage("That doesn't work from here.");
-			return;
-		}
 		if (!check(sender, "clans.create"))
 		{
 			sender.sendMessage(ChatColor.RED + "Access denied.");
 			return;
 		}
-		Player player = (Player) sender;
 		if (name.equalsIgnoreCase("config"))
 		{
-			player.sendMessage(ChatColor.RED + "Invalid clan name.");
+			sender.sendMessage(ChatColor.RED + "Invalid clan name.");
 			return;
 		}
 		Clan clan = new Clan(this, name);
-		if (getClan(sender) == null)
+		if ((getClan(sender, true) == null) && (sender instanceof Player))
 		{
+			Player player = (Player) sender;
 			clan.addMember(player);
 		}
 		clans.add(clan);
-		player.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Clan created");
+		sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Clan created");
 		clanLog.info("{event:'clan-created',clan:'" + clan.getName() + "'}");
 	}
 
@@ -953,15 +891,7 @@ public class Clans extends JavaPlugin
 
 	private void getMembers(CommandSender sender, Clan clan)
 	{
-		String message = "List of members: ";
-		List<String> members = clan.getMembers();
-		int i = 0;
-		for (String member : members)
-		{
-			message += member + " ";
-			i++;
-		}
-		sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + message);
+		clan.sendMembers(sender);
 	}
 
 	private void getCouncil(CommandSender sender)
@@ -988,12 +918,7 @@ public class Clans extends JavaPlugin
 
 	private void getCouncil(CommandSender sender, Clan clan)
 	{
-		String message = "List of clan council: ";
-		for (String member : clan.getCouncil())
-		{
-			message += member + " ";
-		}
-		sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + message);
+		clan.sendCouncil(sender);
 	}
 
 	private void getLeader(CommandSender sender)
@@ -1020,7 +945,7 @@ public class Clans extends JavaPlugin
 
 	private void getLeader(CommandSender sender, Clan clan)
 	{
-		sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Clan leader is " + clan.getLeaderPlayer());
+		clan.sendLeader(sender);
 	}
 
 	private void setChat(CommandSender sender)
@@ -1041,14 +966,7 @@ public class Clans extends JavaPlugin
 			sender.sendMessage(ChatColor.RED + "Access denied.");
 			return;
 		}
-		if (clan.toggleChat())
-		{
-			sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Chat is now enabled.");
-		}
-		else
-		{
-			sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Chat is now disabled.");
-		}
+		clan.toggleChat(sender);
 	}
 
 	private void setOpenApps(CommandSender sender)
@@ -1125,8 +1043,7 @@ public class Clans extends JavaPlugin
 			player.sendMessage(ChatColor.RED + "Access denied.");
 			return;
 		}
-		clan.setHallLocation(player.getLocation());
-		player.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Clan hall is now set to your current location.");
+		clan.setHallLocation(player);
 	}
 
 	private void deny(CommandSender sender, String playerName)
@@ -1372,8 +1289,7 @@ public class Clans extends JavaPlugin
 			sender.sendMessage(ChatColor.RED + "Access denied.");
 			return;
 		}
-		clan.setTag(tag);
-		sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Tag set to " + tag + ".");
+		clan.setTag(sender, tag);
 	}
 
 	private void setLeader(CommandSender sender, String playerName)
@@ -1405,8 +1321,7 @@ public class Clans extends JavaPlugin
 			sender.sendMessage(ChatColor.RED + player.getDisplayName() + ChatColor.RED + " is not on the clan council and cannot be promoted.");
 			return;
 		}
-		clan.setLeader(player);
-		sender.sendMessage(ChatColor.RED + clan.getName() + ": " + ChatColor.YELLOW + "Leader set to " + player.getDisplayName() + ".");
+		clan.setLeader(sender, player);
 	}
 
 	private void warDeclare(CommandSender sender, String name)

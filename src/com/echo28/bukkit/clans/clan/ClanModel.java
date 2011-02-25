@@ -1,4 +1,4 @@
-package com.echo28.bukkit.clans;
+package com.echo28.bukkit.clans.clan;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,6 +13,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import com.echo28.bukkit.clans.Clans;
 
 
 public class ClanModel

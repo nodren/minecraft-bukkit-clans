@@ -9,6 +9,7 @@ import java.util.TimerTask;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityListener;
 
@@ -24,25 +25,29 @@ public class ClanEntityListener extends EntityListener
 	}
 
 	@Override
-	public void onEntityDamageByEntity(EntityDamageByEntityEvent event)
+	public void onEntityDamage(EntityDamageEvent event)
 	{
-		if (event.isCancelled()) { return; }
-		Entity damager = event.getDamager();
-		Entity damagee = event.getEntity();
-		if ((damager instanceof Player) && (damagee instanceof Player))
+		if (event instanceof EntityDamageByEntityEvent)
 		{
-			// this is PVP
-			Player winner = (Player) damager;
-			Player loser = (Player) damagee;
-			if ((loser.getHealth() > 0) && ((loser.getHealth() - event.getDamage()) <= 0))
+			EntityDamageByEntityEvent sub = (EntityDamageByEntityEvent) event;
+			if (sub.isCancelled()) { return; }
+			Entity damager = sub.getDamager();
+			Entity damagee = sub.getEntity();
+			if ((damager instanceof Player) && (damagee instanceof Player))
 			{
-				// the loser has died because of this damage
-				List<String> details = new ArrayList<String>();
-				details.add(winner.getName());
-				details.add(event.getCause().toString());
-				possibleDeaths.put(loser.getName(), details);
-				Timer timer = new Timer();
-				timer.schedule(new RemovePlayerTimerTask(loser.getName()), 5000);
+				// this is PVP
+				Player winner = (Player) damager;
+				Player loser = (Player) damagee;
+				if ((loser.getHealth() > 0) && ((loser.getHealth() - sub.getDamage()) <= 0))
+				{
+					// the loser has died because of this damage
+					List<String> details = new ArrayList<String>();
+					details.add(winner.getName());
+					details.add(sub.getCause().toString());
+					possibleDeaths.put(loser.getName(), details);
+					Timer timer = new Timer();
+					timer.schedule(new RemovePlayerTimerTask(loser.getName()), 5000);
+				}
 			}
 		}
 	}
